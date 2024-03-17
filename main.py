@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime
 from collections import defaultdict
 from mpi4py import MPI
@@ -11,7 +12,6 @@ hourly_sentiments = defaultdict(float)
 daily_sentiments = defaultdict(float)
 hourly_tweet_counts = defaultdict(int)
 daily_tweet_counts = defaultdict(int)
-
 
 def get_sentiment(sentiment_data):
     if isinstance(sentiment_data, (int, float)):
@@ -56,6 +56,11 @@ def analysis_tweets(tweet_line):
 
 
 if __name__ == '__main__':
+    if rank == 0:
+        print('current core size is:' + str(size))
+
+    start_time = time.time() if rank == 0 else None
+
     path_to_file = './resources/twitter-50mb.json'
 
     with open(path_to_file, 'r') as file:
@@ -83,3 +88,9 @@ if __name__ == '__main__':
         print(f'Happiest Day: {happiest_day}, Sentiment: {all_daily_sentiments[0][happiest_day]}')
         print(f'Most Active Hour: {most_active_hour}, Tweet Count: {all_hourly_tweet_counts[0][most_active_hour]}')
         print(f'Most Active Day: {most_active_day}, Tweet Count: {all_daily_tweet_counts[0][most_active_day]}')
+
+    if rank == 0:
+        # Stop the timer in the main process and calculate the elapsed time
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Total execution time: {elapsed_time:.2f} seconds")
