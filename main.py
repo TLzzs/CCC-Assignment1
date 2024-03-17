@@ -90,7 +90,6 @@ if __name__ == '__main__':
         print(f'Most Active Day: {most_active_day}, Tweet Count: {all_daily_tweet_counts[0][most_active_day]}')
 
     if rank == 0:
-        # Stop the timer in the main process and calculate the elapsed time
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Total execution time: {elapsed_time:.2f} seconds")
