@@ -13,6 +13,7 @@ daily_sentiments = defaultdict(float)
 hourly_tweet_counts = defaultdict(int)
 daily_tweet_counts = defaultdict(int)
 
+
 def get_sentiment(sentiment_data):
     if isinstance(sentiment_data, (int, float)):
         return sentiment_data
@@ -24,35 +25,37 @@ def get_sentiment(sentiment_data):
 def get_date_hour(timestamp):
     timestamp_object = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
     date = timestamp_object.strftime('%Y-%m-%d')
-    hour = timestamp_object.strftime('%H:00')
+    hour = timestamp_object.strftime('%Y-%m-%d %H:00')
     return date, hour
 
 
-def analysis_tweets(tweet_line):
-    if tweet_line.strip() in ('{', '}', '[', ']', '{]}') or '"rows":[' in tweet_line:
-        return
-    try:
-        cleaned_line = tweet_line.rstrip(",\n\r ").strip()
-        if not cleaned_line.startswith('{') or cleaned_line == '{}]}':
+def process_tweets_batch(tweets_batch):
+    for tweet_line in tweets_batch:
+        if tweet_line.strip() in ('{', '}', '[', ']', '{]}') or '"rows":[' in tweet_line:
             return
-        tweet = json.loads(cleaned_line)
-        tweet_data = tweet.get('doc', {}).get('data', {})
-        sentiment_data = tweet_data.get('sentiment')
-        created_at = tweet_data.get('created_at')
+        try:
+            cleaned_line = tweet_line.rstrip(",\n\r ").strip()
+            if not cleaned_line.startswith('{') or cleaned_line == '{}]}':
+                return
+            tweet = json.loads(cleaned_line)
+            tweet_data = tweet.get('doc', {}).get('data', {})
+            sentiment_data = tweet_data.get('sentiment')
+            created_at = tweet_data.get('created_at')
 
-        if sentiment_data is None or created_at is None:
-            return
+            if sentiment_data is None or created_at is None:
+                return
 
-        sentiment = get_sentiment(sentiment_data)
-        date_str, hour_str = get_date_hour(created_at)
+            sentiment = get_sentiment(sentiment_data)
+            date_str, hour_str = get_date_hour(created_at)
 
-        hourly_sentiments[hour_str] += sentiment
-        daily_sentiments[date_str] += sentiment
-        hourly_tweet_counts[hour_str] += 1
-        daily_tweet_counts[date_str] += 1
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON from line: {tweet_line}")
-        print(e)
+            hourly_sentiments[hour_str] += sentiment
+            daily_sentiments[date_str] += sentiment
+            hourly_tweet_counts[hour_str] += 1
+            daily_tweet_counts[date_str] += 1
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON from line: {tweet_line}")
+            print(e)
+    pass
 
 
 if __name__ == '__main__':
@@ -61,12 +64,21 @@ if __name__ == '__main__':
 
     start_time = time.time() if rank == 0 else None
 
-    path_to_file = './resources/twitter-50mb.json'
+    path_to_file = './resources/twitter-100gb.json'
+
+    batch_size = 10000
 
     with open(path_to_file, 'r') as file:
+        tweets_batch = []
         for i, line in enumerate(file):
             if i % size == rank:
-                analysis_tweets(line.strip())
+                tweets_batch.append(line.strip())
+                if len(tweets_batch) >= batch_size:
+                    process_tweets_batch(tweets_batch)
+                    tweets_batch.clear()
+
+        if tweets_batch:
+            process_tweets_batch(tweets_batch)
 
     all_hourly_sentiments = comm.gather(hourly_sentiments, root=0)
     all_daily_sentiments = comm.gather(daily_sentiments, root=0)
